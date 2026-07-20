@@ -338,6 +338,22 @@
 #define ID_MM_INITIAL_QMAP_MUX_ID "ID_MM_INITIAL_QMAP_MUX_ID"
 
 /**
+ * ID_MM_QMI_FIXED_MUX_ID:
+ *
+ * This is a device-specific tag that specifies the QMI WDS mux id that must be
+ * used when binding a client to the main network interface, without creating a
+ * multiplexed QMAP link.
+ *
+ * An integer value greater or equal than 1 and smaller than 255.
+ *
+ * If a multiplexed QMAP link is created, the mux id assigned to that link takes
+ * precedence over this setting.
+ *
+ * Since: 1.26
+ */
+#define ID_MM_QMI_FIXED_MUX_ID "ID_MM_QMI_FIXED_MUX_ID"
+
+/**
  * ID_MM_AT_NETWORK_TIME_BROKEN:
  *
  * This is a device-specific tag that allows users to prevent ModemManager from

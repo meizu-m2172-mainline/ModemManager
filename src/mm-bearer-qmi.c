@@ -2582,6 +2582,7 @@ _connect (MMBaseBearer        *_self,
         g_object_unref (task);
         return;
     }
+    ctx->mux_id = mm_port_qmi_get_fixed_mux_id (ctx->qmi);
     ctx->dap = mm_port_qmi_get_data_aggregation_protocol (ctx->qmi);
 
     /* load all settings from bearer */

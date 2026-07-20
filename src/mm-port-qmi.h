@@ -90,6 +90,7 @@ gboolean   mm_port_qmi_close_finish (MMPortQmi            *self,
 
 void       mm_port_qmi_set_net_details (MMPortQmi *self,
                                         MMPort    *first_net);
+guint      mm_port_qmi_get_fixed_mux_id (MMPortQmi *self);
 
 typedef enum {
     MM_PORT_QMI_FLAG_DEFAULT  = 0,

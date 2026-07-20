@@ -21,6 +21,7 @@
 #include <libqmi-glib.h>
 
 #include <ModemManager.h>
+#include <ModemManager-tags.h>
 #include <mm-errors-types.h>
 
 #include "mm-port-qmi.h"
@@ -61,6 +62,7 @@ struct _MMPortQmiPrivate {
     gchar     *net_sysfs_path;
     guint      net_preallocated_links_requested;
     guint      net_initial_mux_id;
+    guint      net_fixed_mux_id;
 #if defined WITH_QRTR
     QrtrNode  *node;
 #endif
@@ -2736,6 +2738,7 @@ mm_port_qmi_set_net_details (MMPortQmi *self,
                              MMPort    *first_net)
 {
     MMKernelDevice *first_net_dev;
+    const gchar    *fixed_mux_id_str;
 
     first_net_dev = mm_port_peek_kernel_device (first_net);
 
@@ -2753,7 +2756,27 @@ mm_port_qmi_set_net_details (MMPortQmi *self,
     g_assert (!self->priv->net_initial_mux_id);
     self->priv->net_initial_mux_id = mm_kernel_device_get_global_property_as_int (first_net_dev, "ID_MM_INITIAL_QMAP_MUX_ID");
 
+    fixed_mux_id_str = mm_kernel_device_get_global_property (first_net_dev, ID_MM_QMI_FIXED_MUX_ID);
+    if (fixed_mux_id_str) {
+        guint fixed_mux_id;
+
+        if (mm_get_uint_from_str (fixed_mux_id_str, &fixed_mux_id) &&
+            fixed_mux_id > QMI_DEVICE_MUX_ID_UNBOUND &&
+            fixed_mux_id < G_MAXUINT8)
+            self->priv->net_fixed_mux_id = fixed_mux_id;
+        else
+            mm_obj_warn (self, "invalid %s value '%s', ignoring it", ID_MM_QMI_FIXED_MUX_ID, fixed_mux_id_str);
+    }
+
     initialize_endpoint_info (self);
+}
+
+guint
+mm_port_qmi_get_fixed_mux_id (MMPortQmi *self)
+{
+    g_return_val_if_fail (MM_IS_PORT_QMI (self), QMI_DEVICE_MUX_ID_UNBOUND);
+
+    return self->priv->net_fixed_mux_id;
 }
 
 /*****************************************************************************/

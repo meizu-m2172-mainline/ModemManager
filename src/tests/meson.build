@@ -28,7 +28,10 @@ deps = [
 test_units += {'qcdm-serial-port': deps}
 
 if enable_qmi
-  test_units += {'modem-helpers-qmi': libkerneldevice_dep}
+  test_units += {
+    'modem-helpers-qmi': libkerneldevice_dep,
+    'port-qmi': libport_dep,
+  }
 endif
 
 if enable_mbim
