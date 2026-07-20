@@ -116,8 +116,9 @@ peek_port_qmi_for_data (MMBroadbandModemQmi  *self,
                         MMQmiDataEndpoint    *out_endpoint,
                         GError              **error)
 {
-    MMKernelDevice *net_port;
-    const gchar    *net_port_driver;
+    MMBroadbandModemQmiClass *parent_class;
+    MMKernelDevice           *net_port;
+    const gchar              *net_port_driver;
 
     g_assert (MM_IS_BROADBAND_MODEM_QMI (self));
     g_assert (mm_port_get_subsys (data) == MM_PORT_SUBSYS_NET);
@@ -131,13 +132,8 @@ peek_port_qmi_for_data (MMBroadbandModemQmi  *self,
     if (g_strcmp0 (net_port_driver, "bam-dmux") == 0)
         return peek_port_qmi_for_data_bam_dmux (self, data, out_endpoint, error);
 
-    g_set_error (error,
-                 MM_CORE_ERROR,
-                 MM_CORE_ERROR_FAILED,
-                 "Unsupported QMI kernel driver for 'net/%s': %s",
-                 mm_port_get_device (data),
-                 net_port_driver);
-    return NULL;
+    parent_class = MM_BROADBAND_MODEM_QMI_CLASS (mm_broadband_modem_qmi_qcom_soc_parent_class);
+    return parent_class->peek_port_qmi_for_data (self, data, out_endpoint, error);
 }
 
 /*****************************************************************************/
