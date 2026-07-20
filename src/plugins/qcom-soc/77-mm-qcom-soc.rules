@@ -2,9 +2,15 @@
 
 ACTION!="add|change|move|bind", GOTO="mm_qcom_soc_end"
 
+# The SDX55 exposes QMI over QRTR and the data path over MHI. Its dedicated
+# MHI MBIM channel is not functional, so don't attempt to probe it.
+SUBSYSTEM=="wwan", ENV{DEVTYPE}=="wwan_port", KERNEL=="*mbim*", ATTRS{vendor}=="0x17cb", ATTRS{device}=="0x0306", ATTRS{subsystem_vendor}=="0x17cb", ATTRS{subsystem_device}=="0x010c", ENV{ID_MM_PORT_IGNORE}="1"
+
 # Process only known wwan, net and rpmsg ports
 SUBSYSTEM=="net",   DRIVERS=="bam-dmux",      GOTO="mm_qcom_soc_process"
 SUBSYSTEM=="net",   DRIVERS=="ipa",           GOTO="mm_qcom_soc_process"
+SUBSYSTEM=="net",   KERNEL=="mhi_hwip0", ATTRS{vendor}=="0x17cb", ATTRS{device}=="0x0306", ATTRS{subsystem_vendor}=="0x17cb", ATTRS{subsystem_device}=="0x010c", GOTO="mm_qcom_soc_process"
+SUBSYSTEM=="net",   KERNEL=="mhi_swip0", ATTRS{vendor}=="0x17cb", ATTRS{device}=="0x0306", ATTRS{subsystem_vendor}=="0x17cb", ATTRS{subsystem_device}=="0x010c", GOTO="mm_qcom_soc_process"
 SUBSYSTEM=="wwan",  DRIVERS=="qcom-q6v5-mss", GOTO="mm_qcom_soc_process"
 SUBSYSTEM=="rpmsg", DRIVERS=="qcom-q6v5-mss", GOTO="mm_qcom_soc_process"
 GOTO="mm_qcom_soc_end"
@@ -22,6 +28,11 @@ ENV{ID_MM_QCOM_SOC}="1"
 # based control ports plus BAM-DMUX based network ports.
 #
 ENV{ID_MM_PHYSDEV_UID}="qcom-soc"
+
+# The SDX55 requires an explicit WDS bind to PCIe endpoint 4, mux id 1 even
+# when the main raw-IP interface is used without QMAP aggregation.
+SUBSYSTEM=="net", KERNEL=="mhi_hwip0", ATTRS{vendor}=="0x17cb", ATTRS{device}=="0x0306", ATTRS{subsystem_vendor}=="0x17cb", ATTRS{subsystem_device}=="0x010c", ENV{ID_MM_QMI_FIXED_MUX_ID}="1"
+SUBSYSTEM=="net", KERNEL=="mhi_swip0", ATTRS{vendor}=="0x17cb", ATTRS{device}=="0x0306", ATTRS{subsystem_vendor}=="0x17cb", ATTRS{subsystem_device}=="0x010c", ENV{ID_MM_QMI_FIXED_MUX_ID}="1"
 
 # port type hints for the rpmsgexport-ed ports
 SUBSYSTEM=="rpmsg", ATTR{name}=="DATA*", ATTR{name}=="*_CNTL", ENV{ID_MM_PORT_TYPE_QMI}="1"
