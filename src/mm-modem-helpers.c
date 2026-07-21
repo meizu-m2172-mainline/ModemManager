@@ -1778,6 +1778,129 @@ mm_3gpp_profile_list_find_best (GList                  *profile_list,
 
 /*************************************************************************/
 
+static gboolean
+profile_string_equal (const gchar *a,
+                      const gchar *b)
+{
+    if ((!a || !a[0]) && (!b || !b[0]))
+        return TRUE;
+
+    return (g_strcmp0 (a, b) == 0);
+}
+
+static gboolean
+profile_auth_matches_connection (MM3gppProfile *requested,
+                                 MM3gppProfile *existing)
+{
+    const gchar         *requested_user;
+    const gchar         *requested_password;
+    const gchar         *existing_user;
+    const gchar         *existing_password;
+    MMBearerAllowedAuth  requested_auth;
+    MMBearerAllowedAuth  existing_auth;
+    gboolean             has_requested_credentials;
+
+    requested_user = mm_3gpp_profile_get_user (requested);
+    requested_password = mm_3gpp_profile_get_password (requested);
+    existing_user = mm_3gpp_profile_get_user (existing);
+    existing_password = mm_3gpp_profile_get_password (existing);
+
+    if (!profile_string_equal (requested_user, existing_user) ||
+        !profile_string_equal (requested_password, existing_password))
+        return FALSE;
+
+    has_requested_credentials = ((requested_user && requested_user[0]) ||
+                                 (requested_password && requested_password[0]));
+    requested_auth = mm_3gpp_profile_get_allowed_auth (requested);
+    existing_auth = mm_3gpp_profile_get_allowed_auth (existing);
+
+    if (!has_requested_credentials)
+        return (existing_auth == MM_BEARER_ALLOWED_AUTH_UNKNOWN ||
+                existing_auth == MM_BEARER_ALLOWED_AUTH_NONE);
+
+    if (requested_auth == MM_BEARER_ALLOWED_AUTH_UNKNOWN)
+        return FALSE;
+
+    return (requested_auth == existing_auth);
+}
+
+gint
+mm_3gpp_profile_list_find_connection_match (GList          *profile_list,
+                                            MM3gppProfile  *requested,
+                                            GEqualFunc      cmp_apn,
+                                            gint            min_profile_id,
+                                            gint            max_profile_id,
+                                            gpointer        log_object)
+{
+    const gchar      *requested_apn;
+    MMBearerIpFamily  requested_ip_type;
+    MMBearerApnType   requested_apn_type;
+    gint              matched_profile_id = MM_3GPP_PROFILE_ID_UNKNOWN;
+    GList            *l;
+
+    requested_apn = mm_3gpp_profile_get_apn (requested);
+    requested_ip_type = mm_3gpp_profile_get_ip_type (requested);
+    requested_apn_type = mm_3gpp_profile_get_apn_type (requested);
+
+    /* Keep APN-only requests and requests with an implicit IP type on the
+     * existing connection path. */
+    if (!requested_apn || !requested_apn[0] ||
+        requested_ip_type == MM_BEARER_IP_FAMILY_NONE ||
+        requested_ip_type == MM_BEARER_IP_FAMILY_ANY)
+        return MM_3GPP_PROFILE_ID_UNKNOWN;
+
+    for (l = profile_list; l; l = g_list_next (l)) {
+        MM3gppProfile  *existing = l->data;
+        const gchar    *existing_apn;
+        MMBearerApnType existing_apn_type;
+        gint            existing_profile_id;
+
+        existing_profile_id = mm_3gpp_profile_get_profile_id (existing);
+        if (existing_profile_id < min_profile_id || existing_profile_id > max_profile_id)
+            continue;
+
+        if (!mm_3gpp_profile_get_enabled (existing)) {
+            mm_obj_dbg (log_object, "skipping profile %d: disabled", existing_profile_id);
+            continue;
+        }
+
+        existing_apn = mm_3gpp_profile_get_apn (existing);
+        if (cmp_apn) {
+            if (!cmp_apn (requested_apn, existing_apn))
+                continue;
+        } else if (g_strcmp0 (requested_apn, existing_apn) != 0)
+            continue;
+
+        if (requested_ip_type != mm_3gpp_profile_get_ip_type (existing))
+            continue;
+
+        existing_apn_type = mm_3gpp_profile_get_apn_type (existing);
+        if (requested_apn_type == MM_BEARER_APN_TYPE_NONE) {
+            if (existing_apn_type != MM_BEARER_APN_TYPE_NONE &&
+                existing_apn_type != MM_BEARER_APN_TYPE_DEFAULT)
+                continue;
+        } else if (requested_apn_type != existing_apn_type)
+            continue;
+
+        if (!profile_auth_matches_connection (requested, existing))
+            continue;
+
+        if (matched_profile_id != MM_3GPP_PROFILE_ID_UNKNOWN) {
+            mm_obj_dbg (log_object,
+                        "multiple profiles match connection settings: %d and %d",
+                        matched_profile_id,
+                        existing_profile_id);
+            return MM_3GPP_PROFILE_ID_UNKNOWN;
+        }
+
+        matched_profile_id = existing_profile_id;
+    }
+
+    return matched_profile_id;
+}
+
+/*************************************************************************/
+
 static void
 mm_3gpp_pdp_context_format_free (MM3gppPdpContextFormat *format)
 {
