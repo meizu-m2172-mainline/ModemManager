@@ -464,6 +464,7 @@ static void cleanup_event_report_unsolicited_events (MMBearerQmi *self,
 
 typedef enum {
     CONNECT_STEP_FIRST,
+    CONNECT_STEP_SELECT_PROFILE,
     CONNECT_STEP_LOAD_PROFILE_SETTINGS,
     CONNECT_STEP_OPEN_QMI_PORT,
     CONNECT_STEP_SETUP_DATA_FORMAT,
@@ -507,6 +508,7 @@ typedef struct {
     gchar                *apn;
     QmiWdsAuthentication  auth;
     gboolean              no_ip_family_preference;
+    MM3gppProfile        *requested_profile;
 
     MMBearerMultiplexSupport       multiplex;
     QmiWdaDataAggregationProtocol  dap;
@@ -707,6 +709,7 @@ connect_context_free (ConnectContext *ctx)
     g_free (ctx->apn);
     g_free (ctx->user);
     g_free (ctx->password);
+    g_clear_object (&ctx->requested_profile);
 
     if (ctx->client_ipv4) {
         if (ctx->packet_service_status_ipv4_indication_id) {
@@ -1869,6 +1872,45 @@ load_ip_type_settings_from_profile (ConnectContext *ctx,
 }
 
 static void
+list_profiles_ready (MMIfaceModem3gppProfileManager *modem,
+                     GAsyncResult                   *res,
+                     GTask                          *task)
+{
+    MMBearerQmi    *self;
+    ConnectContext *ctx;
+    GError         *error = NULL;
+    GList          *profiles = NULL;
+    gint            profile_id;
+
+    self = g_task_get_source_object (task);
+    ctx = g_task_get_task_data (task);
+
+    if (!mm_iface_modem_3gpp_profile_manager_list_profiles_finish (modem, res, &profiles, &error)) {
+        mm_obj_dbg (self, "couldn't list 3GPP profiles, using APN settings: %s", error->message);
+        g_clear_error (&error);
+    } else {
+        profile_id = mm_3gpp_profile_list_find_connection_match (
+            profiles,
+            ctx->requested_profile,
+            (GEqualFunc)mm_3gpp_cmp_apn_name,
+            1,
+            G_MAXUINT8,
+            self);
+        if (profile_id != MM_3GPP_PROFILE_ID_UNKNOWN) {
+            ctx->profile_id = profile_id;
+            mm_obj_dbg (self, "using profile '%d' matching the requested connection settings", profile_id);
+        } else
+            mm_obj_dbg (self, "no unique 3GPP profile matches the requested connection settings");
+    }
+
+    mm_3gpp_profile_list_free (profiles);
+
+    /* Keep on */
+    ctx->step++;
+    connect_context_step (task);
+}
+
+static void
 get_profile_ready (MMIfaceModem3gppProfileManager *modem,
                    GAsyncResult                   *res,
                    GTask                          *task)
@@ -1885,6 +1927,9 @@ get_profile_ready (MMIfaceModem3gppProfileManager *modem,
         return;
     }
 
+    ctx->ipv4 = FALSE;
+    ctx->ipv6 = FALSE;
+    ctx->no_ip_family_preference = FALSE;
     if (!load_ip_type_settings_from_profile (ctx, profile, &error)) {
         g_prefix_error (&error, "Couldn't load ip type settings from profile: ");
         complete_connect (task, NULL, error);
@@ -1930,6 +1975,26 @@ connect_context_step (GTask *task)
     case CONNECT_STEP_FIRST:
         ctx->step++;
         /* fall through */
+
+    case CONNECT_STEP_SELECT_PROFILE: {
+        MMBearerIpFamily requested_ip_type;
+
+        requested_ip_type = (ctx->requested_profile ?
+                             mm_3gpp_profile_get_ip_type (ctx->requested_profile) :
+                             MM_BEARER_IP_FAMILY_NONE);
+        if (ctx->profile_id == MM_3GPP_PROFILE_ID_UNKNOWN &&
+            ctx->apn && ctx->apn[0] &&
+            requested_ip_type != MM_BEARER_IP_FAMILY_NONE &&
+            requested_ip_type != MM_BEARER_IP_FAMILY_ANY) {
+            mm_obj_dbg (self, "looking for a 3GPP profile matching the requested connection settings...");
+            mm_iface_modem_3gpp_profile_manager_list_profiles (
+                MM_IFACE_MODEM_3GPP_PROFILE_MANAGER (ctx->modem),
+                (GAsyncReadyCallback)list_profiles_ready,
+                task);
+            return;
+        }
+        ctx->step++;
+    } /* fall through */
 
     case CONNECT_STEP_LOAD_PROFILE_SETTINGS:
         if (ctx->profile_id != MM_3GPP_PROFILE_ID_UNKNOWN) {
@@ -2491,6 +2556,8 @@ load_settings_from_bearer (MMBearerQmi         *self,
          * we load the real profile to use */
         return TRUE;
     }
+
+    ctx->requested_profile = g_object_ref (mm_bearer_properties_peek_3gpp_profile (properties));
 
     /* APN settings */
     ctx->apn = g_strdup (mm_bearer_properties_get_apn (properties));

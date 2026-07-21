@@ -2977,6 +2977,220 @@ test_profile_selection (void)
 }
 
 /*****************************************************************************/
+/* Test read-only connection profile matching */
+
+static MM3gppProfile *
+connection_profile_new (gint                 profile_id,
+                        const gchar         *apn,
+                        MMBearerIpFamily     ip_type,
+                        MMBearerApnType      apn_type,
+                        gboolean             enabled,
+                        MMBearerAllowedAuth  allowed_auth,
+                        const gchar         *user,
+                        const gchar         *password)
+{
+    MM3gppProfile *profile;
+
+    profile = mm_3gpp_profile_new ();
+    mm_3gpp_profile_set_profile_id (profile, profile_id);
+    mm_3gpp_profile_set_apn (profile, apn);
+    mm_3gpp_profile_set_ip_type (profile, ip_type);
+    mm_3gpp_profile_set_apn_type (profile, apn_type);
+    mm_3gpp_profile_set_enabled (profile, enabled);
+    mm_3gpp_profile_set_allowed_auth (profile, allowed_auth);
+    mm_3gpp_profile_set_user (profile, user);
+    mm_3gpp_profile_set_password (profile, password);
+    return profile;
+}
+
+static gint
+find_connection_profile (GList          *profiles,
+                         MM3gppProfile  *requested)
+{
+    return mm_3gpp_profile_list_find_connection_match (
+        profiles,
+        requested,
+        (GEqualFunc)mm_3gpp_cmp_apn_name,
+        1,
+        G_MAXUINT8,
+        NULL);
+}
+
+static void
+test_profile_connection_match (void)
+{
+    g_autoptr(MM3gppProfile) requested = NULL;
+    GList                   *profiles = NULL;
+    gint                     profile_id;
+
+    requested = connection_profile_new (MM_3GPP_PROFILE_ID_UNKNOWN,
+                                        "cmnet",
+                                        MM_BEARER_IP_FAMILY_IPV4V6,
+                                        MM_BEARER_APN_TYPE_NONE,
+                                        TRUE,
+                                        MM_BEARER_ALLOWED_AUTH_UNKNOWN,
+                                        NULL,
+                                        NULL);
+    profiles = g_list_append (profiles,
+                              connection_profile_new (1,
+                                                      "cmnet",
+                                                      MM_BEARER_IP_FAMILY_IPV4,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+    profiles = g_list_append (profiles,
+                              connection_profile_new (3,
+                                                      "CMNET",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+
+    profile_id = find_connection_profile (profiles, requested);
+    g_assert_cmpint (profile_id, ==, 3);
+
+    mm_3gpp_profile_list_free (profiles);
+}
+
+static void
+test_profile_connection_match_disabled (void)
+{
+    g_autoptr(MM3gppProfile) requested = NULL;
+    GList                   *profiles = NULL;
+
+    requested = connection_profile_new (MM_3GPP_PROFILE_ID_UNKNOWN,
+                                        "cmnet",
+                                        MM_BEARER_IP_FAMILY_IPV4V6,
+                                        MM_BEARER_APN_TYPE_NONE,
+                                        TRUE,
+                                        MM_BEARER_ALLOWED_AUTH_UNKNOWN,
+                                        NULL,
+                                        NULL);
+    profiles = g_list_append (profiles,
+                              connection_profile_new (3,
+                                                      "CMNET",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      FALSE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+
+    g_assert_cmpint (find_connection_profile (profiles, requested), ==, MM_3GPP_PROFILE_ID_UNKNOWN);
+
+    mm_3gpp_profile_list_free (profiles);
+}
+
+static void
+test_profile_connection_match_ambiguous (void)
+{
+    g_autoptr(MM3gppProfile) requested = NULL;
+    GList                   *profiles = NULL;
+
+    requested = connection_profile_new (MM_3GPP_PROFILE_ID_UNKNOWN,
+                                        "cmnet",
+                                        MM_BEARER_IP_FAMILY_IPV4V6,
+                                        MM_BEARER_APN_TYPE_NONE,
+                                        TRUE,
+                                        MM_BEARER_ALLOWED_AUTH_UNKNOWN,
+                                        NULL,
+                                        NULL);
+    profiles = g_list_append (profiles,
+                              connection_profile_new (3,
+                                                      "CMNET",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+    profiles = g_list_append (profiles,
+                              connection_profile_new (4,
+                                                      "cmnet",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+
+    g_assert_cmpint (find_connection_profile (profiles, requested), ==, MM_3GPP_PROFILE_ID_UNKNOWN);
+
+    mm_3gpp_profile_list_free (profiles);
+}
+
+static void
+test_profile_connection_match_rejects_implicit_settings (void)
+{
+    g_autoptr(MM3gppProfile) requested = NULL;
+    GList                   *profiles = NULL;
+
+    requested = connection_profile_new (MM_3GPP_PROFILE_ID_UNKNOWN,
+                                        "cmnet",
+                                        MM_BEARER_IP_FAMILY_NONE,
+                                        MM_BEARER_APN_TYPE_NONE,
+                                        TRUE,
+                                        MM_BEARER_ALLOWED_AUTH_UNKNOWN,
+                                        NULL,
+                                        NULL);
+    profiles = g_list_append (profiles,
+                              connection_profile_new (3,
+                                                      "CMNET",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+
+    g_assert_cmpint (find_connection_profile (profiles, requested), ==, MM_3GPP_PROFILE_ID_UNKNOWN);
+
+    mm_3gpp_profile_list_free (profiles);
+}
+
+static void
+test_profile_connection_match_rejects_different_settings (void)
+{
+    g_autoptr(MM3gppProfile) requested = NULL;
+    GList                   *profiles = NULL;
+
+    requested = connection_profile_new (MM_3GPP_PROFILE_ID_UNKNOWN,
+                                        "cmnet",
+                                        MM_BEARER_IP_FAMILY_IPV4V6,
+                                        MM_BEARER_APN_TYPE_NONE,
+                                        TRUE,
+                                        MM_BEARER_ALLOWED_AUTH_UNKNOWN,
+                                        NULL,
+                                        NULL);
+    profiles = g_list_append (profiles,
+                              connection_profile_new (3,
+                                                      "CMNET",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_IMS,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_NONE,
+                                                      NULL,
+                                                      NULL));
+    profiles = g_list_append (profiles,
+                              connection_profile_new (4,
+                                                      "cmnet",
+                                                      MM_BEARER_IP_FAMILY_IPV4V6,
+                                                      MM_BEARER_APN_TYPE_DEFAULT,
+                                                      TRUE,
+                                                      MM_BEARER_ALLOWED_AUTH_CHAP,
+                                                      "user",
+                                                      "password"));
+
+    g_assert_cmpint (find_connection_profile (profiles, requested), ==, MM_3GPP_PROFILE_ID_UNKNOWN);
+
+    mm_3gpp_profile_list_free (profiles);
+}
+
+/*****************************************************************************/
 /* Test CPMS responses */
 
 static gboolean
@@ -5065,6 +5279,11 @@ int main (int argc, char **argv)
     g_test_suite_add (suite, TESTCASE (test_cgdcont_read_response_simcom, NULL));
 
     g_test_suite_add (suite, TESTCASE (test_profile_selection, NULL));
+    g_test_suite_add (suite, TESTCASE (test_profile_connection_match, NULL));
+    g_test_suite_add (suite, TESTCASE (test_profile_connection_match_disabled, NULL));
+    g_test_suite_add (suite, TESTCASE (test_profile_connection_match_ambiguous, NULL));
+    g_test_suite_add (suite, TESTCASE (test_profile_connection_match_rejects_implicit_settings, NULL));
+    g_test_suite_add (suite, TESTCASE (test_profile_connection_match_rejects_different_settings, NULL));
 
     g_test_suite_add (suite, TESTCASE (test_cgact_read_response_none, NULL));
     g_test_suite_add (suite, TESTCASE (test_cgact_read_response_single_inactive, NULL));

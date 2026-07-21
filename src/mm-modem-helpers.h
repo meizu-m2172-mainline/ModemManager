@@ -487,6 +487,12 @@ gint   mm_3gpp_profile_list_find_best  (GList                  *profile_list,
                                         gpointer                log_object,
                                         MM3gppProfile         **out_reused,
                                         gboolean               *out_overwritten);
+gint   mm_3gpp_profile_list_find_connection_match (GList          *profile_list,
+                                                    MM3gppProfile  *requested,
+                                                    GEqualFunc      cmp_apn,
+                                                    gint            min_profile_id,
+                                                    gint            max_profile_id,
+                                                    gpointer        log_object);
 
 MM3gppProfile *mm_3gpp_profile_list_find_by_profile_id (GList   *profile_list,
                                                         gint     profile_id,
