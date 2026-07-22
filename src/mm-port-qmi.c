@@ -61,6 +61,7 @@ struct _MMPortQmiPrivate {
     gchar     *net_driver;
     gchar     *net_sysfs_path;
     guint      net_preallocated_links_requested;
+    gboolean   net_default_multiplex;
     guint      net_fixed_mux_id;
 #if defined WITH_QRTR
     QrtrNode  *node;
@@ -2726,6 +2727,10 @@ mm_port_qmi_set_net_details (MMPortQmi *self,
     g_assert (!self->priv->net_preallocated_links_requested);
     self->priv->net_preallocated_links_requested = mm_kernel_device_get_global_property_as_int (first_net_dev, "ID_MM_QMI_PREALLOCATED_LINKS");
 
+    self->priv->net_default_multiplex = mm_kernel_device_get_global_property_as_boolean (
+        first_net_dev,
+        ID_MM_QMI_DEFAULT_MULTIPLEX);
+
     fixed_mux_id_str = mm_kernel_device_get_global_property (first_net_dev, ID_MM_QMI_FIXED_MUX_ID);
     if (fixed_mux_id_str) {
         guint fixed_mux_id;
@@ -2739,6 +2744,14 @@ mm_port_qmi_set_net_details (MMPortQmi *self,
     }
 
     initialize_endpoint_info (self);
+}
+
+gboolean
+mm_port_qmi_get_default_multiplex (MMPortQmi *self)
+{
+    g_return_val_if_fail (MM_IS_PORT_QMI (self), FALSE);
+
+    return self->priv->net_default_multiplex;
 }
 
 guint
