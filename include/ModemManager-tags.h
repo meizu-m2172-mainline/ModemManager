@@ -338,6 +338,20 @@
 #define ID_MM_INITIAL_QMAP_MUX_ID "ID_MM_INITIAL_QMAP_MUX_ID"
 
 /**
+ * ID_MM_QMI_DEFAULT_MULTIPLEX:
+ *
+ * This is a device-specific tag that specifies that QMI bearers should use
+ * multiplexed links by default.
+ *
+ * If set to true, multiplex support is required whenever the bearer settings
+ * don't explicitly select a multiplex mode. Explicit bearer settings always
+ * take precedence over this default.
+ *
+ * Since: 1.26
+ */
+#define ID_MM_QMI_DEFAULT_MULTIPLEX "ID_MM_QMI_DEFAULT_MULTIPLEX"
+
+/**
  * ID_MM_QMI_FIXED_MUX_ID:
  *
  * This is a device-specific tag that specifies the QMI WDS mux id that must be

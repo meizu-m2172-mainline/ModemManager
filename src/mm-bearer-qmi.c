@@ -2508,7 +2508,8 @@ load_settings_from_bearer (MMBearerQmi         *self,
     if (ctx->multiplex == MM_BEARER_MULTIPLEX_SUPPORT_UNKNOWN) {
         if (mm_context_get_test_multiplex_requested ())
             ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_REQUESTED;
-        else if (!g_strcmp0 (data_port_driver, "ipa"))
+        else if (!g_strcmp0 (data_port_driver, "ipa") ||
+                 mm_port_qmi_get_default_multiplex (ctx->qmi))
             ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_REQUIRED;
         else
             ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_NONE;
